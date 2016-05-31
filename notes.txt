@@ -1,0 +1,16 @@
+Need to get icon, version number, and app name
+
+
+Creates launcher directory from template with the following information updated
+info.plist updated with app version number
+applet.icns changed to the applications icon
+creates dmg of app 
+apple script (main.scpt) updated to reflect the app. 
+
+
+optional:
+ui using Tk toolkit
+convert applescript to python
+optional post command
+
+
