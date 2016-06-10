@@ -4,7 +4,10 @@ import plistlib
 import shutil
 
 # Get app directory
-appPath = raw_input("Path to application: ")
+if not len(sys.argv) >= 2:
+	appPath = raw_input("Path to application: ")
+else: 
+	appPath = sys.argv[1]
 
 # Check that the app is a valid directory
 if os.path.exists(appPath):
@@ -15,13 +18,22 @@ if os.path.exists(appPath):
 	appVersion = appInfo["CFBundleShortVersionString"]
 	appIconName = appInfo["CFBundleIconFile"]
 
+	# print information 
+	print appName
+	print appVersion
+	print appIconName
+
 	# Append .icns to icon name from info.plist if not already there
 	if not appIconName.endswith(".icns"):
 		appIconName += ".icns"
 	iconPath = appPath + "/Contents/Resources/" + appIconName
 
 	# Get destination to save app
-	destPath = raw_input("Destination folder: ") 
+	if not len(sys.argv) >= 3:
+		destPath = raw_input("Destination folder: ") 
+	else:
+		destPath = sys.argv[2]
+
 
 	# Create app directory
 	newAppPath = destPath	
@@ -34,9 +46,14 @@ if os.path.exists(appPath):
 	shutil.copytree(os.path.realpath('ContentsTemplate'), newAppPath + '/Contents')
 
 	# Edit new info.plist
+	plistPath = newAppPath + '/Contents/info.plist'
+	newPlist = plistlib.readPlist(plistPath)
+	newPlist['CFBundleName'] = appName
+	newPlist['CFBundleShortVersionString'] = appVersion
+	newPlist['CFBundleIconFile'] = appIconName
+	newPlist['CFBundleIdentifier'] = 'edu.utah.scl.' + appName + 'wrapper'
+	plistlib.writePlist(newPlist, plistPath)
 
-	# Edit new applescript
-	
 	# Verify icon exists and trasfer it 
 	if os.path.exists(iconPath):
 		#TODO: Transfer icon	
@@ -45,6 +62,7 @@ if os.path.exists(appPath):
 		print "Could not transfer app icon"
 
 	# Create app image
-
+	os.system('hdiutil create -srcfolder ' + appPath + ' ' + newAppPath + '/Contents/Resources/' + appName + '.dmg')
 else:
 	print "Invalid Directory"
+
