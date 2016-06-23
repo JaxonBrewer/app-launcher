@@ -10,21 +10,18 @@
 import os
 import sys
 import getpass
+import plistlib
 from subprocess import call
 
-def isRunning():
-	# placeholder for now
-	return False
-
 def launch():
-	myPath = os.path.realpath(__file__)
-	appName = 'APP_NAME'
-	diskName = appName
-	appPath = diskName + '/' + appName + '.app'
-	imagePath = myPath + '/Contents/Resources/' + appName + '.dmg'
-	shadowPath = '/tmp/' + appName + '.shadow'
-	binName = appPath + '/Contents/MacOS/nwjs'
+	appInfo = plistlib.readPlist('../info.plist')
+	appName = appInfo['CFBundleName']
 	mountRoot = '/Volumes'
+	diskName = appName
+	appPath = mountRoot + '/' + diskName + '/' + appName + '.app'
+	imagePath = os.path.realpath(appName + '.dmg')
+	shadowPath = '/tmp/' + appName + '.shadow'
+	
 	currentUser = getpass.getuser()
 	reownScript = '/usr/local/bin/' + appName.lower() + '_change_owner.sh'
 
@@ -41,23 +38,18 @@ def launch():
 		 * -shadow			Allows read/write access by creating 
                            a file the user can edit and shadowing 
                            what would have been the edits there.'''
-		call(['hdiutil', 'attach', '-nobrowse', '-owners on', '-noautoopenro', 'noverify', '-mountroot ' + mountRoot, '-shadow ' + shadowPath, imagePath])
+		call(['hdiutil', 'attach', '-nobrowse', '-owners', 'on', '-noautoopenro', '-noverify', '-mountroot',  mountRoot, '-shadow',  shadowPath, imagePath])
 
-		call(['sudo', reownScript, currentUser])
+		#call(['sudo', reownScript, currentUser])
 	
 	# Launch application for user
 	if os.path.exists(appPath):
 		# * -W	Causes open to block until app exits
 		# * -n	opens a new instance of the app
-		call(['/usr/bin/open', '-W', '-n', '-a ' + appPath])
+		call(['/usr/bin/open', '-a', appPath])
 
 
-
-if isRunning():
-	print "app is already running"
-	#TODO: Make this better
-else:
-	launch()
+launch()
 
 
 

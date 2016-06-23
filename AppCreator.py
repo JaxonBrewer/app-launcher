@@ -2,14 +2,23 @@ import sys
 import os
 import plistlib
 import shutil
+import tempfile
+from subprocess import call
+from setuptools import setup
 
 def buildApp(source):
-	# Open App's info.plist so information can be extracted
-	appInfo = plistlib.readPlist(source + "/Contents/info.plist")
+	# Setup variables
+	APP = ['appLauncher.py']
+	DATA_FILES = []
+	OPTIONS = {'argv_emulation': True}
 
-	appName = appInfo["CFBundleName"]	
-	appVersion = appInfo["CFBundleShortVersionString"]
-	appIconName = appInfo["CFBundleIconFile"]
+	# Open App's info.plist so information can be extracted
+	print 'Getting app info'
+	appInfo = plistlib.readPlist(source + '/Contents/info.plist')
+
+	appName = appInfo['CFBundleName']	
+	appVersion = appInfo['CFBundleShortVersionString']
+	appIconName = appInfo['CFBundleIconFile']
 
 	# print information 
 	'''	
@@ -18,56 +27,79 @@ def buildApp(source):
 	print appIconName
 	'''
 
+
+	# Custom information for info.plist
+	print 'Creating info.plist'
+	infoPlist = {'CFBundleShortVersionString': appVersion,
+				 'CFBundleIdentifier': 'edu.utah.scl.' + appName.lower() + 'wrapper'}
+	OPTIONS['plist'] = infoPlist
+
 	# Append .icns to icon name from info.plist if not already there
-	if not appIconName.endswith(".icns"):
-		appIconName += ".icns"
-	iconPath = source + "/Contents/Resources/" + appIconName
+	print 'Fetching app icon'
+	if not appIconName.endswith('.icns'):
+		appIconName += '.icns'
+	iconPath = source + '/Contents/Resources/' + appIconName
 
-	# Get destination to save app
-	if not len(sys.argv) >= 3:
-		destPath = raw_input("Destination folder: ") 
-	else:
-		destPath = sys.argv[2]
-
-
-	# Create app directory
-	newAppPath = destPath	
-	if not newAppPath[-1] == '/':
-		newAppPath += '/'
-	newAppPath += appName + '.app'		
-	os.makedirs(newAppPath)
-
-	# Copy launcher template to the new directory
-	shutil.copytree(os.path.realpath('ContentsTemplate'), newAppPath + '/Contents')
-
-	# Edit new info.plist
-	plistPath = newAppPath + '/Contents/info.plist'
-	newPlist = plistlib.readPlist(plistPath)
-	newPlist['CFBundleName'] = appName
-	newPlist['CFBundleShortVersionString'] = appVersion
-	newPlist['CFBundleIconFile'] = appIconName
-	newPlist['CFBundleIdentifier'] = 'edu.utah.scl.' + appName + 'wrapper'
-	plistlib.writePlist(newPlist, plistPath)
-
-	# Verify icon exists and trasfer it 
+	# Verify icon exists and add it to app setup
 	if os.path.exists(iconPath):
-		shutil.copy(iconPath, newAppPath + '/Contents/Resources')
+		OPTIONS['iconfile'] = iconPath
+
+
+	# Get destination to save app if not passed as arguement
+	'''
+	if not len(sys.argv) >= 4:
+	
 	else:
-		print "Could not transfer app icon"
+		destPath = sys.argv[3]
+	'''
+	destPath = raw_input('Destination folder: ') 
+	# Check that destination is valid and add it to app setup
+	if not os.path.exists(destPath):
+		print 'Invalid Destination!'
+		exit()	
+	OPTIONS['dist_dir'] = destPath	
+
+	# make tempory dir for image
+	tempDir = tempfile.mkdtemp()
 
 	# Create app image
-	os.system('hdiutil create -quiet -srcfolder ' + source + ' ' + newAppPath + '/Contents/Resources/' + appName + '.dmg')
+	print 'Creating App image'
+	imagePath = tempDir + '/' + appName + '.dmg'
+	call(['hdiutil', 'create', '-srcfolder',  source, imagePath])
+	
+	DATA_FILES.append(imagePath)
 
+	# create app
+	print 'Creating App'
+	try:
+		setup(
+			app=APP,
+			name=appName,
+			data_files=DATA_FILES,
+			options={'py2app': OPTIONS},
+			setup_requires=['py2app']
+		)
+	except TypeError as e:
+		print 'App creation failed: ' + str(e)
+		
+	# Clean up temp directory
+	print 'Cleaning up'
+	shutil.rmtree(tempDir)
+		
+	print 'Done'
 # Get app directory if not passed in as argument
-if not len(sys.argv) >= 2:
-	appPath = raw_input("Path to application: ")
+'''
+if not len(sys.argv) >= 3:
+	appPath = raw_input('Path to application: ')
 else: 
-	appPath = sys.argv[1]
+	appPath = sys.argv[2]
+'''
+appPath = raw_input('Path to application: ')
 
 # Check that the app is a valid directory
 if os.path.exists(appPath):
 	buildApp(appPath)
 else:
-	print "Invalid Directory"
+	print 'Invalid source'
 
 
