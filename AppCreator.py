@@ -3,7 +3,6 @@ import os
 import plistlib
 import shutil
 import tempfile
-from Tkinter import *
 from subprocess import call
 from setuptools import setup
 
