@@ -4,146 +4,179 @@ import plistlib
 import shutil
 import tempfile
 import ttk
+#import tkFileDialog
 from Tkinter import *
 from subprocess import call
 from setuptools import setup
- 
 
+# TCL is not installed in a standard directory, this points it to the correct one
 os.environ['TCL_LIBRARY'] = '/usr/local/python/anaconda2/lib/tcl8.5'
+
 class Application(Frame):
-	def createApp(caller):	
+
+	def getinfo(self):
+		# Retrieve src
+		self.src = self.srcEntry.get()
+
+		#TODO: make sure paths are valid.
+
+
+		# Retrieve data from app info plist
+		appInfo = plistlib.readPlist(source + '/Contents/info.plist')
+
+		appName = appInfo['CFBundleName']
+		appVersion = appInfo['CFBundleShortVersionString']
+		appIconName = appInfo['CFBundleIconFile']
+
+		self.nameEntry.insert(0, appName)
+		self.versionEntry.insert(0, appVersion)
+		self.iconEntry.insert(0, appIconName)
+
+
+
+
+	def createApp(self):
 		# Setup variables
 		APP = ['appLauncher.py']
 		DATA_FILES = []
 		OPTIONS = {'argv_emulation': True}
 
-		source = caller.src.get()
-		dest = caller.src.get()
-
-		# Open App's info.plist so information can be extracted
-		print 'Getting app info'
-		appInfo = plistlib.readPlist(source + '/Contents/info.plist')
-
-		self.appName = appInfo['CFBundleName']	
-		self.appVersion = appInfo['CFBundleShortVersionString']
-		self.appIconName = appInfo['CFBundleIconFile']
-
 		# Custom information for info.plist
 		print 'Creating info.plist'
-		infoPlist = {'CFBundleShortVersionString': self.appVersion,
-					 'CFBundleIdentifier': 'edu.utah.scl.' + self.appName.lower() + 'wrapper'}
+		infoPlist = {'CFBundleShortVersionString': self.versionEntry.get(),
+					 'CFBundleIdentifier': 'edu.utah.scl.' + self.nameEntry.get().lower() + 'wrapper'}
 		OPTIONS['plist'] = infoPlist
 
-		# Append .icns to icon name from info.plist if not already there
-		print 'Fetching app icon'
-		if not self.appIconName.endswith('.icns'):
-			self.appIconName += '.icns'
-		iconPath = source + '/Contents/Resources/' + self.appIconName
+		dest = self.destEntry.get()
+		if not os.path.exists(dest):
+			# destination Invalid
+			exit()
+		OPTIONS['dest_dir'] = dest
 
+		# Create path for icon and append .icns if not already there
+		iconPath = self.src + '/Contents/Resources/' + self.iconEntry.get()
+		if not iconPath.endswith('.icns'):
+			iconPath += '.icns'
 		# Verify icon exists and add it to app setup
 		if os.path.exists(iconPath):
 			OPTIONS['iconfile'] = iconPath
-
-		# Check that destination is valid and add it to app setup
-		if not os.path.exists(destPath):
-			print 'Invalid Destination!'
-			exit()
-		OPTIONS['dist_dir'] = destPath	
 
 		# make tempory dir for image
 		tempDir = tempfile.mkdtemp()
 
 		# Create app image
-		print 'Creating App image'
-		imagePath = tempDir + '/' + self.appName + '.dmg'
-		call(['hdiutil', 'create', '-srcfolder',  source, imagePath])
-		
+		#TODO: create option for setting max image size
+		imagePath = tempDir + '/' + self.nameEntry.get() + '.dmg'
+		call(['hdiutil', 'create', '-srcfolder',  self.src, imagePath])
+
 		DATA_FILES.append(imagePath)
 
+		# py2app requires special arguments
+		oldArgs = sys.argv
+		sys.argv = [oldArgs[0], 'py2app', '--semi-standalone']
+
 		# create app
-		print 'Creating App'
+		#print 'Creating App'
 		try:
 			setup(
 				app=APP,
-				name=self.appName,
+				name=self.nameEntry.get(),
 				data_files=DATA_FILES,
 				options={'py2app': OPTIONS},
 				setup_requires=['py2app']
 			)
 		except TypeError as e:
 			print 'App creation failed: ' + str(e)
-			
+
 		# Clean up temp directory
 		print 'Cleaning up'
 		shutil.rmtree(tempDir)
-			
-		print 'Done'
+		sys.argv = oldArgs # restore the old arguments
 
 	def createWidgets(self):
+		self.pack(padx=10, pady=10) # padding for the entire window
+		self.configure(background=BG_COLOR)
 
-		self.grid(padx=10, pady=10)
-		self.configure(background=background)	
-		# src and dest input
-		Label(self, text='Path to applicationi:', bg=background).grid(row=0, column=0)
-		Label(self, text='New app destination:', bg=background).grid(row=1, column=0)
+		labelWidth = 16
+		entryWidth = 24
+		# Source and Destination input
+		pathFrame = Frame(self)
+		pathFrame.configure(background=BG_COLOR)
+		pathFrame.pack(side=TOP, fill=BOTH, expand=True)
 
-		self.src = Entry(self, highlightbackground=background)
-		self.dest = Entry(self, highlightbackground=background)
-		self.src.grid(row=0, column=1, columnspan=2, sticky='ew')
-		self.dest.grid(row=1, column=1, columnspan=2, sticky='ew')
+		Label(pathFrame, text='Path to Application:', bg=BG_COLOR, width=labelWidth, anchor=E).grid(row=0, column=0)
+		Label(pathFrame, text='Path to Launcher:', bg=BG_COLOR, width=labelWidth, anchor=E).grid(row=1, column=0)
+
+		self.srcEntry = Entry(pathFrame, highlightbackground=BG_COLOR, width=entryWidth).grid(row=0, column=1)
+		self.destEntry = Entry(pathFrame, highlightbackground=BG_COLOR, width=entryWidth).grid(row=1, column=1)
+
+
 
 		self.s0 = ttk.Separator(self, orient=HORIZONTAL)
-		self.s0.grid(row=3, columnspan=3, sticky='ew', padx=3, pady=5)
+		self.s0.pack(side=TOP, fill=BOTH, pady=5)
 
-		# app info preview and editor
-		self.image = PhotoImage(file='test.gif')
-		Label(self, image=self.image, bg=background).grid(row=4, column=0, rowspan=3)
 
-		Label(self, text='CFBundleName:', bg=background).grid(row=4, column=1)
-		Label(self, text='CFBundleShortVersionString:', bg=background).grid(row=5, column=1)
-		Label(self, text='CFBundleIconFile:', bg=background).grid(row=6, column=1)
 
-		self.name = Entry(self,textvariable=self.appName, highlightbackground=background)
-		self.version = Entry(self, textvariable=self.appName, highlightbackground=background)
-		self.icon = Entry(self, textvariable=self.appIconName, highlightbackground=background)
+		# App info preview and editor
+		self.image = PhotoImage(file='test.gif') #TODO: replace the preview image
+		Label(self, image=self.image, bg=BG_COLOR).pack()
 
-		self.name.grid(row=4, column=2)
-		self.version.grid(row=5, column=2)
-		self.icon.grid(row=6, column=2)
+		# Default info plist attributes
+		attributeFrame = Frame(self)
+		attributeFrame.configure(background=BG_COLOR)
+		attributeFrame.pack(side=TOP, fill=BOTH, expand=True)
+
+
+		Label(attributeFrame, text='App Name:', bg=BG_COLOR, width=labelWidth, anchor=E).grid(row=0, column=0)
+		Label(attributeFrame, text='(CFBundleName)', bg=BG_COLOR, font='Arial 10', anchor=E).grid(row=1, column=0, sticky=E)
+		Label(attributeFrame, text='Version Number:', bg=BG_COLOR, width=labelWidth, anchor=E).grid(row=2, column=0)
+		Label(attributeFrame, text='(CFBundleShortVersionString)', bg=BG_COLOR, font="Arial 10", anchor=E).grid(row=3, column=0, sticky=E)
+		Label(attributeFrame, text='Icon File:', bg=BG_COLOR, width=labelWidth, anchor=E).grid(row=4, column=0)
+		Label(attributeFrame, text='(CFBundleIconFile)', bg=BG_COLOR, font="Arial 10", anchor=E).grid(row=5, column=0, sticky=E)
+
+		self.nameEntry = Entry(attributeFrame, highlightbackground=BG_COLOR, width=entryWidth)
+		self.versionEntry = Entry(attributeFrame, highlightbackground=BG_COLOR, width=entryWidth)
+		self.iconEntry = Entry(attributeFrame, highlightbackground=BG_COLOR, width=entryWidth)
+
+		self.nameEntry.grid(row=0, rowspan=2, column=1)
+		self.versionEntry.grid(row=2, rowspan=2, column=1)
+		self.iconEntry.grid(row=4, rowspan=2, column=1)
 
 
 		self.s1 = ttk.Separator(self, orient=HORIZONTAL)
-		self.s1.grid(row=7, columnspan=3, sticky='ew', padx=3, pady=5)
+		self.s1.pack(side=TOP, fill=X, pady=5)
 
 
 		# Options
-		Label(self, text='Shadow Path:', bg=background).grid(row=8, column=0)
-		Label(self, text='Preflight Script:', bg=background).grid(row=9, column=0)
-		Label(self, text='Postflight Script:', bg=background).grid(row=10, column=0)
+		optionsFrame = Frame(self)
+		optionsFrame.configure(background=BG_COLOR)
+		optionsFrame.pack(side=TOP, fill=BOTH, expand=True)
 
-		self.shadow = Entry(self, highlightbackground=background)
-		self.preflight = Entry(self, highlightbackground=background)
-		self.postflight = Entry(self, highlightbackground=background)
+		Label(optionsFrame, text='Shadow Path:', bg=BG_COLOR, width=labelWidth, anchor=E).grid(row=0, column=0)
+		Label(optionsFrame, text='Preflight Script:', bg=BG_COLOR, width=labelWidth, anchor=E).grid(row=1, column=0)
+		Label(optionsFrame, text='Postflight Script:', bg=BG_COLOR, width=labelWidth, anchor=E).grid(row=2, column=0)
 
-		self.shadow.grid(row=8, column=1, columnspan=2, sticky='ew')
-		self.preflight.grid(row=9, column=1, columnspan=2, sticky='ew')
-		self.postflight.grid(row=10, column=1, columnspan=2, sticky='ew')
+		self.shadowEntry = Entry(optionsFrame, highlightbackground=BG_COLOR, width=entryWidth)
+		self.preflightEntry = Entry(optionsFrame, highlightbackground=BG_COLOR, width=entryWidth)
+		self.postflightEntry = Entry(optionsFrame, highlightbackground=BG_COLOR, width=entryWidth)
 
-		Button(self, text="Create", command=self.createApp, width=20, pady=5, highlightbackground=background).grid(row=11, column=2)
+		self.shadowEntry.grid(row=0, column=1)
+		self.preflightEntry.grid(row=1, column=1)
+		self.postflightEntry.grid(row=2, column=1)
+
+		Button(self, text="Create", command=self.createApp, width=20, pady=5, highlightbackground=BG_COLOR).pack()
 
 	def __init__(self, master=None):
 		Frame.__init__(self, master)
-		#self.pack()
 
-		self.appName = ""
-		self.appVersion = ""
-		self.appIconName = ""
+		# initialize variables
+		self.src = ''
 
 		self.createWidgets()
-	
-background="lightgrey"
+
+BG_COLOR="lightgrey"
 
 root= Tk()
-root.configure(background=background)
+root.configure(background=BG_COLOR)
 app=Application(root)
-app.mainloop() 
+app.mainloop()
