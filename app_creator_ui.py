@@ -5,8 +5,9 @@ import shutil
 import tempfile
 import ttk
 import tkFileDialog
-import PIL.Image
-import PIL.ImageTk
+# My installation of PIL is broken, so I cannot use it.
+#import PIL.Image
+#import PIL.ImageTk
 from Tkinter import *
 from subprocess import call
 from setuptools import setup
@@ -44,6 +45,7 @@ class Application(Frame):
 		self.longVersionEntry.insert(0, appLongVersion)
 		self.iconEntry.insert(0, appIconName)
 
+		'''
 		iconPath = self.src + '/Contents/Resources/' + appIconName
 		if not iconPath.endswith('.icns'):
 			iconPath += '.icns'
@@ -53,6 +55,7 @@ class Application(Frame):
 		labelimage = PIL.ImageTk.PhotoImage(newim)
 		self.iconPreview.configure(image=labelImage)
 		self.iconPreview.image = labelImage
+		'''
 
 		return True
 
@@ -151,8 +154,8 @@ class Application(Frame):
 
 
 		# App info preview and editor
-		#self.image = PhotoImage(file='test.gif') #TODO: replace the preview image
-		self.iconPreview = Label(self, bg=BG_COLOR).pack()
+		# Image preview does not work since PIL does not work
+		#	self.iconPreview = Label(self, bg=BG_COLOR).pack()
 
 		# Default info plist attributes
 		attributeFrame = Frame(self)
