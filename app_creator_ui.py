@@ -60,16 +60,58 @@ class Application(Frame):
 
 		return True
 
-	def openFile(self):
+	def selectSrcFile(self):
 		# Clear the input and then get a file from the dialog
+		fileoptions = {}
+		fileoptions['initialdir'] = os.path.expanduser('~')
+		fileoptions['defaultextension'] = '.app'
+		fileoptions['filetypes'] = [('apps', '.app'), ('All Files', '.*')]
+		fileoptions['title'] = 'Open App'
 		self.srcEntry.delete(0, END)
-		self.srcEntry.insert(0, tkFileDialog.askopenfilename(**self.file_opt))
+		self.srcEntry.insert(0, tkFileDialog.askopenfilename(**fileoptions))
 		self.getinfo()
 
-	def openDir(self):
+	def selectDestDir(self):
 		# Clear the input and get the destination from the dialog
+		diroptions = {}
+		diroptions['initialdir'] = os.path.expanduser('~')
+		diroptions['mustexist'] = True
+		diroptions['title'] = 'Save Destination'
 		self.destEntry.delete(0, END)
-		self.destEntry.insert(0, tkFileDialog.askdirectory(**self.dir_opt))
+		self.destEntry.insert(0, tkFileDialog.askdirectory(**diroptions))
+
+	def selectShadowDir(self):
+		diroptions = {}
+		diroptions['initialdir'] = os.path.expanduser('~')
+		diroptions['mustexist'] = True
+		diroptions['title'] = 'Shadow Directory'
+		self.shadowEntry.delete(0, END)
+		self.shadowEntry.insert(0, tkFileDialog.askdirectory(**diroptions))
+
+	def selectPreFile(self):
+		fileoptions = {}
+		fileoptions['initialdir'] = os.path.expanduser('~')
+		fileoptions['title'] = 'Open Executable'
+		self.preflightEntry.delete(0, END)
+		self.preflightEntry.insert(0, tkFileDialog.askopenfilename(**fileoptions))
+
+	def selectPostFile(self):
+		fileoptions = {}
+		fileoptions['initialdir'] = os.path.expanduser('~')
+		fileoptions['title'] = 'Open Executable'
+		self.postflightEntry.delete(0, END)
+		self.postflightEntry.insert(0, tkFileDialog.askopenfilename(**fileoptions))
+
+	def clearAll(self):
+		self.srcEntry.delete(0, END)
+		self.destEntry.delete(0, END)
+		self.nameEntry.delete(0, END)
+		self.longVersionEntry.delete(0, END)
+		self.shortVersionEntry.delete(0, END)
+		self.iconEntry.delete(0, END)
+		self.shadowEntry.delete(0, END)
+		self.preflightEntry.delete(0, END)
+		self.postflightEntry.delete(0, END)
 
 	# returns false if app creation fails
 	def createApp(self):
@@ -99,20 +141,52 @@ class Application(Frame):
 		OPTIONS['dist_dir'] = dest
 
 		# Create path for icon and append .icns if not already there
-		iconPath = self.src + '/Contents/Resources/' + self.iconEntry.get()
-		if not iconPath.endswith('.icns'):
-			iconPath += '.icns'
+		iconPath = self.iconEntry.get()
+		if not os.path.isfile(iconPath):
+			iconPath = self.src + '/Contents/Resources/' + iconPath
+			if not iconPath.endswith('.icns'):
+				iconPath += '.icns'
+				if not os.path.isfile(iconPath):
+					print 'invalid icon'
+
+
 		# Verify icon exists and add it to app setup
 		if os.path.exists(iconPath):
 			OPTIONS['iconfile'] = iconPath
 
+
 		# make tempory dir for image
 		tempDir = tempfile.mkdtemp()
+
+		preflightPath = self.preflightEntry.get()
+		postflightPath = self.postflightEntry.get()
+
+		if preflightPath:
+			if os.path.isfile(preflightPath):
+				# copy and rename executable to preflight
+				preflightPath = shutil.copyfile(preflightPath, os.path.join(tempDir, 'preflight'))
+				OPTIONS['extra_scripts'] = preflightPath
+			else:
+				print 'preflight path is invalid'
+
+		if postflightPath:
+			if os.path.isfile(postflightPath):
+				# copy and rename executable to postflight
+				postflightPath = shutil.copyfile(postflightPath, os.path.join(tempDir, 'postflight'))
+				# if there is already preflight script, add the postflight with a comma
+				if OPTIONS['extra_scripts'] is None:
+					OPTIONS['extra_scripts'] = postflightPath
+				else:
+					OPTIONS['extra_scripts'] += ', ' + postflightPath
+			else:
+				print 'postflight path is invalid'
+
+
 
 		# Create app image
 		#TODO: create option for setting max image size
 		imagePath = tempDir + '/' + appName + '.dmg'
-		call(['hdiutil', 'create', '-srcfolder',  self.src, imagePath])
+		call(['hdiutil', 'create', '-volname', appName, '-srcfolder',  self.src, imagePath])
 
 		DATA_FILES.append(imagePath)
 
@@ -149,6 +223,8 @@ class Application(Frame):
 
 		labelWidth = 18
 		entryWidth = 45
+
+		# Logo
 		self.image = PhotoImage(file='logo.ppm', )
 		Label(self, bg=BG_COLOR, foreground=FG_COLOR, image=self.image).pack(fill=BOTH, expand=True, padx=0, pady=0)
 
@@ -160,13 +236,15 @@ class Application(Frame):
 		Label(pathFrame, text='Path to Application:', bg=BG_COLOR, foreground=FG_COLOR, width=labelWidth, anchor=E).grid(row=0, column=0)
 		Label(pathFrame, text='Path to Launcher:', bg=BG_COLOR, foreground=FG_COLOR, width=labelWidth, anchor=E).grid(row=1, column=0)
 
-		self.srcEntry = Entry(pathFrame, highlightbackground=BG_COLOR, width=entryWidth-5, validate="focusout", validatecommand=self.getinfo)
-		self.srcEntry.grid(row=0, column=1)
+		self.srcEntry = Entry(pathFrame, highlightbackground=BG_COLOR, width=entryWidth-5, validate='focusout', validatecommand=self.getinfo)
 		self.destEntry = Entry(pathFrame, highlightbackground=BG_COLOR, width=entryWidth-5)
+		self.srcEntry.grid(row=0, column=1)
 		self.destEntry.grid(row=1, column=1)
 
-		Button(pathFrame, text='Browse', command=self.openFile, font="Arial 10", highlightbackground=BG_COLOR, pady=5, padx=2).grid(row=0, column=2)
-		Button(pathFrame, text='Browse', command=self.openDir, font="Arial 10", highlightbackground=BG_COLOR, pady=5, padx=2).grid(row=1, column=2)
+		Button(pathFrame, text='Browse', command=self.selectSrcFile, font='Arial 10', highlightbackground=BG_COLOR, pady=5, padx=2).grid(row=0, column=2)
+		Button(pathFrame, text='Browse', command=self.selectDestDir, font='Arial 10', highlightbackground=BG_COLOR, pady=5, padx=2).grid(row=1, column=2)
+
+
 
 		ttk.Separator(self, orient=HORIZONTAL).pack(side=TOP, fill=BOTH, padx=5)
 
@@ -191,14 +269,15 @@ class Application(Frame):
 		self.longVersionEntry = Entry(attributeFrame, highlightbackground=BG_COLOR, width=entryWidth)
 		self.shortVersionEntry = Entry(attributeFrame, highlightbackground=BG_COLOR, width=entryWidth)
 		self.iconEntry = Entry(attributeFrame, highlightbackground=BG_COLOR, width=entryWidth)
-
 		self.nameEntry.grid(row=0, column=1)
 		self.longVersionEntry.grid(row=1, column=1)
 		self.shortVersionEntry.grid(row=2, column=1)
 		self.iconEntry.grid(row=3, column=1)
 
 
+
 		ttk.Separator(self, orient=HORIZONTAL).pack(side=TOP, fill=X, pady=5, padx=5)
+
 
 
 		# Options
@@ -210,35 +289,36 @@ class Application(Frame):
 		Label(optionsFrame, text='Preflight:', bg=BG_COLOR, foreground=FG_COLOR, width=labelWidth, anchor=E).grid(row=1, column=0)
 		Label(optionsFrame, text='Postflight:', bg=BG_COLOR, foreground=FG_COLOR, width=labelWidth, anchor=E).grid(row=2, column=0)
 
-		self.shadowEntry = Entry(optionsFrame, highlightbackground=BG_COLOR, width=entryWidth)
-		self.preflightEntry = Entry(optionsFrame, highlightbackground=BG_COLOR, width=entryWidth)
-		self.postflightEntry = Entry(optionsFrame, highlightbackground=BG_COLOR, width=entryWidth)
-
+		self.shadowEntry = Entry(optionsFrame, highlightbackground=BG_COLOR, width=entryWidth-5)
+		self.preflightEntry = Entry(optionsFrame, highlightbackground=BG_COLOR, width=entryWidth-5)
+		self.postflightEntry = Entry(optionsFrame, highlightbackground=BG_COLOR, width=entryWidth-5)
 		self.shadowEntry.grid(row=0, column=1)
 		self.preflightEntry.grid(row=1, column=1)
 		self.postflightEntry.grid(row=2, column=1)
 
-		Button(self, text="Create", command=self.createApp, width=20, pady=5, highlightbackground=BG_COLOR).pack(pady=10)
+		Button(optionsFrame, text='Browse', command=self.selectShadowDir, font='Arial 10', highlightbackground=BG_COLOR, pady=5, padx=2).grid(row=0, column=2)
+		Button(optionsFrame, text='Browse', command=self.selectPreFile, font='Arial 10', highlightbackground=BG_COLOR, pady=5, padx=2).grid(row=1, column=2)
+		Button(optionsFrame, text='Browse', command=self.selectPostFile, font='Arial 10', highlightbackground=BG_COLOR, pady=5, padx=2).grid(row=2, column=2)
+
+
+		buttonFrame = Frame(self)
+		buttonFrame.configure(background=BG_COLOR)
+		buttonFrame.pack(side=TOP, fill=BOTH, expand=True, padx=5, pady=10)
+
+		Button(buttonFrame, text='Reset', command=self.clearAll, width=15, pady=5, highlightbackground=BG_COLOR).grid(row=0, column=0)
+		Button(buttonFrame, text='Create', command=self.createApp, width=15, pady=5, highlightbackground=BG_COLOR).grid(row=0, column=1)
 
 	def __init__(self, master=None):
 		Frame.__init__(self, master)
 
 		# initialize variables
 		self.src = ''
-		self.file_opt = fileoptions = {}
-		fileoptions['initialdir'] = '/Volumes/Data/Users/u0823377/'
-		fileoptions['defaultextension'] = '.app'
-		fileoptions['filetypes'] = [('apps', '.app'), ('All Files', '.*')]
-		fileoptions['title'] = 'Open App'
-		self.dir_opt = diroptions = {}
-		diroptions['initialdir'] = '/Volumes/Data/Users/u/'
-		diroptions['mustexist'] = True
-		diroptions['title'] = 'Save Destination'
+
 
 		self.createWidgets()
 
-BG_COLOR="lightgrey"
-FG_COLOR="black"
+BG_COLOR='lightgrey'
+FG_COLOR='black'
 root = Tk()
 root.configure(background=BG_COLOR)
 app=Application(root)

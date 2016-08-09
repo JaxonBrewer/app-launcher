@@ -8,6 +8,14 @@
 # sandbox environment that has not effect on the host system
 # of the application.
 
+
+#TODO appname does not change name of app inside image, causing it to fail to launches
+#TODO pre/postflight executables aren't being copied correctly
+#TODO add status label
+#TODO disk size limit options
+
+
+
 import os
 import sys
 import plistlib
@@ -21,6 +29,12 @@ def launch():
 	appPath = mountRoot + '/' + diskName + '/' + appName + '.app'
 	imagePath = os.path.realpath(appName + '.dmg')
 	shadowPath = appInfo['ShadowPath']
+
+	# execute the preflight script if it exists
+	# NOTE there is a possible security risk here as this will execute anything,
+	# it shouldn't be a problem if the app directory is write protected.
+	if os.path.isfile("preflight"):
+		execfile("preflight")
 
 	# Check that the app image is mounted, mount it if it is not
 	if not os.path.ismount(mountRoot + '/' + diskName):
@@ -37,6 +51,9 @@ def launch():
                            what would have been the edits there.'''
 		call(['hdiutil', 'attach', '-nobrowse', '-owners', 'on', '-noautoopenro', '-noverify', '-mountroot',  mountRoot, '-shadow',  shadowPath, imagePath])
 
+	# execute the postflight script if it exists
+	if os.path.isfile("postflight"):
+		execfile("postflight")
 
 	# Launch application for user
 	if os.path.exists(appPath):
