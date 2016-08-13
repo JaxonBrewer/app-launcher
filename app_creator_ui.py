@@ -34,6 +34,8 @@ class Application(Frame):
 		appLongVersion = appInfo['CFBundleVersion']
 		appIconName = appInfo['CFBundleIconFile']
 
+
+
 		# Clear entry boxes
 		self.nameEntry.delete(0, END)
 		self.shortVersionEntry.delete(0, END)
@@ -58,6 +60,8 @@ class Application(Frame):
 		self.iconPreview.image = labelImage
 		'''
 
+		self.statusText.set('Gathered info from app')
+		self.update_idletasks()
 		return True
 
 	def selectSrcFile(self):
@@ -112,15 +116,56 @@ class Application(Frame):
 		self.shadowEntry.delete(0, END)
 		self.preflightEntry.delete(0, END)
 		self.postflightEntry.delete(0, END)
+		self.statusText.set('Cleared')
+		self.update_idletasks()
+
+	def validateInfo(self):
+		src = self.srcEntry.get()
+		dest = self.destEntry.get()
+		pre = self.preflightEntry.get()
+		post = self.postflightEntry.get()
+
+		if not os.path.exists(src) and not src.endswith('.app'):
+			self.statusText.set('Invalid Source')
+			self.update_idletasks()
+			return False
+		if not os.path.isdir(dest):
+			self.statusText.set('Invalid Destination')
+			self.update_idletasks()
+			return False
+		if not os.path.isfile(pre) and pre is not None:
+			self.statusText.set('Preflight executable invalid')
+			self.update_idletasks()
+			return False
+		if not os.path.isfile(post) and post is not None:
+			self.statusText.set('Postflight executable invalid')
+			self.update_idletasks()
+			return False
+		if self.nameEntry.get() is None:
+			self.statusText.set('App must have a name')
+			self.update_idletasks()
+			return False
+
+		# All good
+		return True
 
 	# returns false if app creation fails
 	def createApp(self):
+		self.statusText.set('Creating App...')
+		self.update_idletasks()
+		if not self.validateInfo:
+			return False
+
+
 		# Setup variables
+		returnValue = True
 		APP = ['appLauncher.py']
 		DATA_FILES = []
 		OPTIONS = {'argv_emulation': True}
 
 		appName = self.nameEntry.get()
+		self.statusText.set('Setting shadow path')
+		self.update_idletasks()
 		shadowPath = self.shadowEntry.get()
 		if not shadowPath:
 			shadowPath = '/tmp/' + appName + '.shadow'
@@ -128,26 +173,28 @@ class Application(Frame):
 			shadowPath = os.path.join(shadowPath, appName + '.shadow')
 
 		# Custom information for info.plist
+		self.statusText.set('Creating info plist')
+		self.update_idletasks()
 		infoPlist = {'CFBundleShortVersionString': self.shortVersionEntry.get(),
 					 'CFBundleVersion': self.longVersionEntry.get(),
 					 'CFBundleIdentifier': 'edu.utah.scl.' + appName.lower() + 'wrapper',
-					 'ShadowPath': shadowPath}
+					 'ShadowPath': shadowPath,
+					 'AppFileName': os.path.basename(os.path.normpath(self.src))}
 		OPTIONS['plist'] = infoPlist
 
 		dest = self.destEntry.get()
-		if not os.path.exists(dest):
-			# destination Invalid
-			return False
 		OPTIONS['dist_dir'] = dest
 
 		# Create path for icon and append .icns if not already there
+		self.statusText.set('Adding Icon')
+		self.update_idletasks()
 		iconPath = self.iconEntry.get()
 		if not os.path.isfile(iconPath):
 			iconPath = self.src + '/Contents/Resources/' + iconPath
 			if not iconPath.endswith('.icns'):
 				iconPath += '.icns'
 				if not os.path.isfile(iconPath):
-					print 'invalid icon'
+					self.statusText.set('Could not add icon')
 
 
 		# Verify icon exists and add it to app setup
@@ -156,48 +203,68 @@ class Application(Frame):
 
 
 		# make tempory dir for image
+		self.statusText.set('Creating tempory directory')
+		self.update_idletasks()
 		tempDir = tempfile.mkdtemp()
+		OPTIONS['bdist_base'] = os.path.join(tempDir, 'build')
 
+		# Add pre/postlight executables if they exists
+		self.statusText.set('Checking for pre/postflight executables')
+		self.update_idletasks()
 		preflightPath = self.preflightEntry.get()
 		postflightPath = self.postflightEntry.get()
 
 		if preflightPath:
 			if os.path.isfile(preflightPath):
 				# copy and rename executable to preflight
-				preflightPath = shutil.copyfile(preflightPath, os.path.join(tempDir, 'preflight'))
-				OPTIONS['extra_scripts'] = preflightPath
+				newPath = os.path.join(tempDir, 'preflight')
+				preflightPath = shutil.copyfile(preflightPath, newPath)
+				OPTIONS['extra_scripts'] = newPath
 			else:
-				print 'preflight path is invalid'
+				self.statusText.set('Preflight executable is invalid')
+				self.update_idletasks()
 
 		if postflightPath:
 			if os.path.isfile(postflightPath):
 				# copy and rename executable to postflight
-				postflightPath = shutil.copyfile(postflightPath, os.path.join(tempDir, 'postflight'))
+				newPath = os.path.join(tempDir, 'postflight')
+				shutil.copyfile(postflightPath, newPath)
 				# if there is already preflight script, add the postflight with a comma
 				if OPTIONS['extra_scripts'] is None:
-					OPTIONS['extra_scripts'] = postflightPath
+					OPTIONS['extra_scripts'] = newPath
 				else:
-					OPTIONS['extra_scripts'] += ', ' + postflightPath
+					OPTIONS['extra_scripts'] += ', ' + newPath
 			else:
-				print 'postflight path is invalid'
+				self.statusText.set('Postflight executable is invalid')
+				self.update_idletasks()
 
 
 
 		# Create app image
+		self.statusText.set('Creating disk image... (this may take a while)')
+		self.update_idletasks()
 		#TODO: create option for setting max image size
-		imagePath = tempDir + '/' + appName + '.dmg'
-		call(['hdiutil', 'create', '-volname', appName, '-srcfolder',  self.src, imagePath])
+		diskImagePath = tempDir + '/' + appName + '.dmg'
 
-		DATA_FILES.append(imagePath)
+		call(['hdiutil', 'create', '-quiet', '-volname', appName, '-srcfolder',  self.src, diskImagePath])
 
-		# py2app requires special arguments, the semi-standalone flag is being used
-		# because it crashes without, however this makes the app rely on the python
-		# that is installed on the system.
+		DATA_FILES.append(diskImagePath)
+
+		# py2app requires special arguments.
+		# The semi-standalone flag is being used because it crashes without,
+		# however this makes the app rely on the python that is installed on
+		# the system.
+		self.statusText.set('Backing up environment')
+		self.update_idletasks()
 		oldArgs = sys.argv
-		sys.argv = [oldArgs[0], 'py2app', '--semi-standalone']
+		sys.argv = [oldArgs[0], 'py2app', '--semi-standalone', '--quiet']
+		# py2app also screws up the environment, so that needs to backed up
+		# restored as well... ugh
+		_environ = dict(os.environ)
 
 		# create app
-		#print 'Creating App'
+		self.statusText.set('Running py2app')
+		self.update_idletasks()
 		try:
 			setup(
 				app=APP,
@@ -207,15 +274,29 @@ class Application(Frame):
 				setup_requires=['py2app']
 			)
 		except TypeError as e:
-			shutil.rmtree(tempDir)
-			return False
+			self.statusText.set('py2app failed to run properly' + str(e))
+			self.update_idletasks()
+			returnValue =  False
 			#print 'App creation failed: ' + str(e)
 
+
 		# Clean up temp directory
-		# print 'Cleaning up'
+		self.statusText.set('Cleaning up')
+		self.update_idletasks()
 		shutil.rmtree(tempDir)
-		sys.argv = oldArgs # restore the old arguments
-		return True
+		# restore everything py2app screwed up
+		self.statusText.set('Restoring environment')
+		self.update_idletasks()
+		sys.argv = oldArgs
+		os.environ.clear()
+		os.environ.update(_environ)
+		if returnValue:
+			self.statusText.set('App created successfully')
+		else:
+			self.statusText.set('App could not be created')
+
+		self.update_idletasks()
+		return returnValue
 
 	def createWidgets(self):
 		self.pack(padx=0, pady=0) # padding for the entire window
@@ -305,8 +386,12 @@ class Application(Frame):
 		buttonFrame.configure(background=BG_COLOR)
 		buttonFrame.pack(side=TOP, fill=BOTH, expand=True, padx=5, pady=10)
 
-		Button(buttonFrame, text='Reset', command=self.clearAll, width=15, pady=5, highlightbackground=BG_COLOR).grid(row=0, column=0)
-		Button(buttonFrame, text='Create', command=self.createApp, width=15, pady=5, highlightbackground=BG_COLOR).grid(row=0, column=1)
+
+
+		self.statusText = StringVar()
+		Label(buttonFrame, textvariable=self.statusText, bg=BG_COLOR, font='Arail 10', foreground=FG_COLOR, width=60, padx=5, anchor=W).grid(row=0, column=0)
+		Button(buttonFrame, text='Reset', command=self.clearAll, highlightbackground=BG_COLOR, width=8, pady=2).grid(row=0, column=1, padx=2)
+		Button(buttonFrame, text='Create', command=self.createApp, highlightbackground=BG_COLOR, width=8, pady=2).grid(row=0, column=2)
 
 	def __init__(self, master=None):
 		Frame.__init__(self, master)

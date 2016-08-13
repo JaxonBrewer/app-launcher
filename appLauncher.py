@@ -8,14 +8,6 @@
 # sandbox environment that has not effect on the host system
 # of the application.
 
-
-#TODO appname does not change name of app inside image, causing it to fail to launches
-#TODO pre/postflight executables aren't being copied correctly
-#TODO add status label
-#TODO disk size limit options
-
-
-
 import os
 import sys
 import plistlib
@@ -26,7 +18,7 @@ def launch():
 	appName = appInfo['CFBundleName']
 	mountRoot = '/Volumes'
 	diskName = appName
-	appPath = mountRoot + '/' + diskName + '/' + appName + '.app'
+	appPath = mountRoot + '/' + diskName + '/' + appInfo['AppFileName']
 	imagePath = os.path.realpath(appName + '.dmg')
 	shadowPath = appInfo['ShadowPath']
 
