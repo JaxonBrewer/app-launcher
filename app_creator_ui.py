@@ -1,3 +1,5 @@
+#! /usr/bin/env python
+
 import os
 import sys
 import plistlib
@@ -122,6 +124,7 @@ class Application(Frame):
 	def validateInfo(self):
 		src = self.srcEntry.get()
 		dest = self.destEntry.get()
+		name = self.nameEntry.get() + '.app'
 		pre = self.preflightEntry.get()
 		post = self.postflightEntry.get()
 
@@ -130,14 +133,18 @@ class Application(Frame):
 			self.update_idletasks()
 			return False
 		if not os.path.isdir(dest):
-			self.statusText.set('Invalid Destination')
+			self.statusText.set('Invalid Destination: Destination does not exist')
 			self.update_idletasks()
 			return False
-		if not os.path.isfile(pre) and pre is not None:
+		if os.path.exists(os.path.join(dest, name)):
+			self.statusText.set('Invalid Destination: App already exists')
+			self.update_idletasks()
+			return False
+		if pre is not '' and not os.path.isfile(pre):
 			self.statusText.set('Preflight executable invalid')
 			self.update_idletasks()
 			return False
-		if not os.path.isfile(post) and post is not None:
+		if post is not '' and not os.path.isfile(post):
 			self.statusText.set('Postflight executable invalid')
 			self.update_idletasks()
 			return False
@@ -153,13 +160,14 @@ class Application(Frame):
 	def createApp(self):
 		self.statusText.set('Creating App...')
 		self.update_idletasks()
-		if not self.validateInfo:
+		if not self.validateInfo():
 			return False
 
 
 		# Setup variables
 		returnValue = True
-		APP = ['appLauncher.py']
+		launcherScript = os.path.join(DIR, 'appLauncher.py')
+		APP = [launcherScript]
 		DATA_FILES = []
 		OPTIONS = {'argv_emulation': True}
 
@@ -257,7 +265,7 @@ class Application(Frame):
 		self.statusText.set('Backing up environment')
 		self.update_idletasks()
 		oldArgs = sys.argv
-		sys.argv = [oldArgs[0], 'py2app', '--semi-standalone', '--quiet']
+		sys.argv = [oldArgs[0], 'py2app', '--semi-standalone']
 		# py2app also screws up the environment, so that needs to backed up
 		# restored as well... ugh
 		_environ = dict(os.environ)
@@ -292,6 +300,7 @@ class Application(Frame):
 		os.environ.update(_environ)
 		if returnValue:
 			self.statusText.set('App created successfully')
+
 		else:
 			self.statusText.set('App could not be created')
 
@@ -322,8 +331,8 @@ class Application(Frame):
 		self.srcEntry.grid(row=0, column=1)
 		self.destEntry.grid(row=1, column=1)
 
-		Button(pathFrame, text='Browse', command=self.selectSrcFile, font='Arial 10', highlightbackground=BG_COLOR, pady=5, padx=2).grid(row=0, column=2)
-		Button(pathFrame, text='Browse', command=self.selectDestDir, font='Arial 10', highlightbackground=BG_COLOR, pady=5, padx=2).grid(row=1, column=2)
+		Button(pathFrame, text='Choose', command=self.selectSrcFile, font='Arial 10', highlightbackground=BG_COLOR, pady=5, padx=2).grid(row=0, column=2)
+		Button(pathFrame, text='Choose', command=self.selectDestDir, font='Arial 10', highlightbackground=BG_COLOR, pady=5, padx=2).grid(row=1, column=2)
 
 
 
@@ -371,15 +380,16 @@ class Application(Frame):
 		Label(optionsFrame, text='Postflight:', bg=BG_COLOR, foreground=FG_COLOR, width=labelWidth, anchor=E).grid(row=2, column=0)
 
 		self.shadowEntry = Entry(optionsFrame, highlightbackground=BG_COLOR, width=entryWidth-5)
+		self.shadowEntry.insert(0, '/tmp')
 		self.preflightEntry = Entry(optionsFrame, highlightbackground=BG_COLOR, width=entryWidth-5)
 		self.postflightEntry = Entry(optionsFrame, highlightbackground=BG_COLOR, width=entryWidth-5)
 		self.shadowEntry.grid(row=0, column=1)
 		self.preflightEntry.grid(row=1, column=1)
 		self.postflightEntry.grid(row=2, column=1)
 
-		Button(optionsFrame, text='Browse', command=self.selectShadowDir, font='Arial 10', highlightbackground=BG_COLOR, pady=5, padx=2).grid(row=0, column=2)
-		Button(optionsFrame, text='Browse', command=self.selectPreFile, font='Arial 10', highlightbackground=BG_COLOR, pady=5, padx=2).grid(row=1, column=2)
-		Button(optionsFrame, text='Browse', command=self.selectPostFile, font='Arial 10', highlightbackground=BG_COLOR, pady=5, padx=2).grid(row=2, column=2)
+		Button(optionsFrame, text='Choose', command=self.selectShadowDir, font='Arial 10', highlightbackground=BG_COLOR, pady=5, padx=2).grid(row=0, column=2)
+		Button(optionsFrame, text='Choose', command=self.selectPreFile, font='Arial 10', highlightbackground=BG_COLOR, pady=5, padx=2).grid(row=1, column=2)
+		Button(optionsFrame, text='Choose', command=self.selectPostFile, font='Arial 10', highlightbackground=BG_COLOR, pady=5, padx=2).grid(row=2, column=2)
 
 
 		buttonFrame = Frame(self)
@@ -398,10 +408,11 @@ class Application(Frame):
 
 		# initialize variables
 		self.src = ''
-
-
 		self.createWidgets()
 
+
+DIR = os.path.dirname(os.path.realpath(__file__))
+os.chdir(DIR)
 BG_COLOR='lightgrey'
 FG_COLOR='black'
 root = Tk()
