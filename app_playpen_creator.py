@@ -7,6 +7,7 @@ import shutil
 import tempfile
 import ttk
 import tkFileDialog
+import logging
 # My installation of PIL is broken, so I cannot use it.
 #import PIL.Image
 #import PIL.ImageTk
@@ -16,6 +17,12 @@ from setuptools import setup
 
 # TCL is not installed in a standard directory, this points it to the correct one
 os.environ['TCL_LIBRARY'] = '/usr/local/python/anaconda2/lib/tcl8.5'
+# set up logging
+LOG_FILE = os.path.expanduser('~/Library/Logs/app_playpen_creator.log')
+if not os.path.exists(os.path.dirname(LOG_FILE)):
+	os.makedirs(os.path.dirname(LOG_FILE))
+logging.basicConfig(filename=LOG_FILE, level=logging.DEBUG)
+
 
 class Application(Frame):
 
@@ -43,11 +50,13 @@ class Application(Frame):
 		self.shortVersionEntry.delete(0, END)
 		self.longVersionEntry.delete(0, END)
 		self.iconEntry.delete(0, END)
+		self.shadowEntry.delete(0, END)
 
 		self.nameEntry.insert(0, appName)
 		self.shortVersionEntry.insert(0, appShortVersion)
 		self.longVersionEntry.insert(0, appLongVersion)
 		self.iconEntry.insert(0, appIconName)
+		self.shadowEntry.insert(0, '~/Library/Application Support/' + appName)
 
 		'''
 		# This is code for displaying the app's icon if PIL is not broken
@@ -129,26 +138,32 @@ class Application(Frame):
 		post = self.postflightEntry.get()
 
 		if not os.path.exists(src) and not src.endswith('.app'):
+			logging.info('App creation failed due to invalid source: ' + src)
 			self.statusText.set('Invalid Source')
 			self.update_idletasks()
 			return False
 		if not os.path.isdir(dest):
+			logging.info('App creation failed due to invalid destination: ' + dest)
 			self.statusText.set('Invalid Destination: Destination does not exist')
 			self.update_idletasks()
 			return False
 		if os.path.exists(os.path.join(dest, name)):
+			logging.info('App creation failed becuase launcher destination already exists.')
 			self.statusText.set('Invalid Destination: App already exists')
 			self.update_idletasks()
 			return False
 		if pre is not '' and not os.path.isfile(pre):
+			logging.info('App creation failed due to invalid preflight script path: '+ pre)
 			self.statusText.set('Preflight executable invalid')
 			self.update_idletasks()
 			return False
 		if post is not '' and not os.path.isfile(post):
+			logging.info('App creation failed due to invalid postflight script path: '+ post)
 			self.statusText.set('Postflight executable invalid')
 			self.update_idletasks()
 			return False
 		if self.nameEntry.get() is None:
+			logging.info('App creation failed becuase it did not have name.')
 			self.statusText.set('App must have a name')
 			self.update_idletasks()
 			return False
@@ -158,6 +173,7 @@ class Application(Frame):
 
 	# returns false if app creation fails
 	def createApp(self):
+		logging.info('Creating launcher for app at ' + self.src)
 		self.statusText.set('Creating App...')
 		self.update_idletasks()
 		if not self.validateInfo():
@@ -166,7 +182,7 @@ class Application(Frame):
 
 		# Setup variables
 		returnValue = True
-		launcherScript = os.path.join(DIR, 'appLauncher.py')
+		launcherScript = os.path.join(DIR, 'app_playpen_launcher.py')
 		APP = [launcherScript]
 		DATA_FILES = []
 		OPTIONS = {'argv_emulation': True}
@@ -176,9 +192,9 @@ class Application(Frame):
 		self.update_idletasks()
 		shadowPath = self.shadowEntry.get()
 		if not shadowPath:
-			shadowPath = '/tmp/' + appName + '.shadow'
+			shadowPath = '/tmp/' + appName + '-shadow_file.shadow'
 		else:
-			shadowPath = os.path.join(shadowPath, appName + '.shadow')
+			shadowPath = os.path.join(shadowPath, appName + '-shadow_file.shadow')
 
 		# Custom information for info.plist
 		self.statusText.set('Creating info plist')
@@ -202,6 +218,7 @@ class Application(Frame):
 			if not iconPath.endswith('.icns'):
 				iconPath += '.icns'
 				if not os.path.isfile(iconPath):
+					logging.warning('Could not find icon at ' + iconPath)
 					self.statusText.set('Could not add icon')
 
 
@@ -282,6 +299,7 @@ class Application(Frame):
 				setup_requires=['py2app']
 			)
 		except TypeError as e:
+			logging.error('App creation failed due to py2app error: ' + str(e))
 			self.statusText.set('py2app failed to run properly' + str(e))
 			self.update_idletasks()
 			returnValue =  False
@@ -299,10 +317,11 @@ class Application(Frame):
 		os.environ.clear()
 		os.environ.update(_environ)
 		if returnValue:
-			self.statusText.set('App created successfully')
+			logging.info('Launcher successfully created at ' + dest + '/' + appName + '.app')
+			self.statusText.set('Launcher created successfully')
 
 		else:
-			self.statusText.set('App could not be created')
+			self.statusText.set('Launcher could not be created')
 
 		self.update_idletasks()
 		return returnValue
@@ -380,7 +399,6 @@ class Application(Frame):
 		Label(optionsFrame, text='Postflight:', bg=BG_COLOR, foreground=FG_COLOR, width=labelWidth, anchor=E).grid(row=2, column=0)
 
 		self.shadowEntry = Entry(optionsFrame, highlightbackground=BG_COLOR, width=entryWidth-5)
-		self.shadowEntry.insert(0, '/tmp')
 		self.preflightEntry = Entry(optionsFrame, highlightbackground=BG_COLOR, width=entryWidth-5)
 		self.postflightEntry = Entry(optionsFrame, highlightbackground=BG_COLOR, width=entryWidth-5)
 		self.shadowEntry.grid(row=0, column=1)

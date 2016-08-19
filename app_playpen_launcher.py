@@ -11,7 +11,14 @@
 import os
 import sys
 import plistlib
+import logging
 from subprocess import call
+
+#logging setup
+LOG_FILE = os.path.expanduser('~/Library/Logs/app_playpen_launcher.log')
+if not os.path.exists(os.path.dirname(LOG_FILE)):
+	os.makedirs(os.path.dirname(LOG_FILE))
+logging.basicConfig(filename=LOG_FILE, level=logging.DEBUG)
 
 def launch():
 	appInfo = plistlib.readPlist('../info.plist')
@@ -20,16 +27,28 @@ def launch():
 	diskName = appName
 	appPath = mountRoot + '/' + diskName + '/' + appInfo['AppFileName']
 	imagePath = os.path.realpath(appName + '.dmg')
-	shadowPath = appInfo['ShadowPath']
+	shadowPath = os.path.expanduser(appInfo['ShadowPath'])
+
+	logging.info('preparing to launch ' + appName)
+
+	#Create shadowpath directory if it does not already exist
+	if not os.path.exists(os.path.dirname(shadowPath)):
+		logging.info('Creating directories for shadow file at ' + os.path.dirname(shadowPath))
+		os.makedirs(os.path.dirname(shadowPath))
+
 
 	# execute the preflight script if it exists
 	# NOTE there is a possible security risk here as this will execute anything,
 	# it shouldn't be a problem if the app directory is write protected.
 	if os.path.isfile("preflight"):
-		execfile("preflight")
-
+		try:
+			loggin.info('executing preflight script for ' + appName)
+			execfile("preflight")
+		except:
+			logging.error('Preflight failed to execute properly')
 	# Check that the app image is mounted, mount it if it is not
 	if not os.path.ismount(mountRoot + '/' + diskName):
+		logging.info('Mounting application image for ' + appName + ' at ' + mountRoot)
 		''' Mount the image at imagePath with:
 		 * -nobrowse		Prevents the volume from appearing in
 		                   Finder or on the Desktop.
@@ -45,11 +64,17 @@ def launch():
 
 	# execute the postflight script if it exists
 	if os.path.isfile("postflight"):
-		execfile("postflight")
+		try:
+			loggin.info('executing postflight script for ' + appName)
+			execfile("postflight")
+		except:
+			logging.error('Postflight failed to execute properly')
 
 	# Launch application for user
 	if os.path.exists(appPath):
+		logging.info('Launching real application at ' + appPath)
 		call(['/usr/bin/open', '-a', appPath])
-
+	else:
+		logging.error('Could not launch real application. App not found at ' + appPath)
 
 launch()
