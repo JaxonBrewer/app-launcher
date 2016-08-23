@@ -42,7 +42,7 @@ def launch():
 	# it shouldn't be a problem if the app directory is write protected.
 	if os.path.isfile("preflight"):
 		try:
-			loggin.info('executing preflight script for ' + appName)
+			logging.info('executing preflight script for ' + appName)
 			execfile("preflight")
 		except:
 			logging.error('Preflight failed to execute properly')
@@ -65,7 +65,7 @@ def launch():
 	# execute the postflight script if it exists
 	if os.path.isfile("postflight"):
 		try:
-			loggin.info('executing postflight script for ' + appName)
+			logging.info('executing postflight script for ' + appName)
 			execfile("postflight")
 		except:
 			logging.error('Postflight failed to execute properly')

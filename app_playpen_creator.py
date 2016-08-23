@@ -242,8 +242,11 @@ class Application(Frame):
 		if preflightPath:
 			if os.path.isfile(preflightPath):
 				# copy and rename executable to preflight
+				st = os.stat(preflightPath)
 				newPath = os.path.join(tempDir, 'preflight')
-				preflightPath = shutil.copyfile(preflightPath, newPath)
+				shutil.copyfile(preflightPath, newPath)
+				# maintain stat info after copy
+				os.chmod(newPath, st.st_mode)
 				OPTIONS['extra_scripts'] = newPath
 			else:
 				self.statusText.set('Preflight executable is invalid')
@@ -252,8 +255,11 @@ class Application(Frame):
 		if postflightPath:
 			if os.path.isfile(postflightPath):
 				# copy and rename executable to postflight
+				st = os.stat(preflightPath)
 				newPath = os.path.join(tempDir, 'postflight')
 				shutil.copyfile(postflightPath, newPath)
+				# maintain stat info after copy
+				os.chmod(newPath, st.st_mode)
 				# if there is already preflight script, add the postflight with a comma
 				if OPTIONS['extra_scripts'] is None:
 					OPTIONS['extra_scripts'] = newPath
